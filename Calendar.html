@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0, viewport-fit=cover"/>
+    <meta name="theme-color" content="#020617" />
+    <title>Weekly Military Time Export</title>
+    <style>
+        /* Mobile-First Base Styles */
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 15px; background: #f8fafc; color: #1e293b; margin: 0; }
+        .container { max-width: 500px; margin: 20px auto; background: white; padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        
+        h2 { margin-top: 0; font-size: 1.5rem; color: #0f172a; text-align: center; }
+        .header-inputs { margin-bottom: 20px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 20px; }
+        
+        label { font-size: 0.875rem; font-weight: 600; color: #64748b; margin-bottom: 4px; display: block; }
+        input { 
+            width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 8px; 
+            font-size: 16px; box-sizing: border-box; transition: border-color 0.2s;
+        }
+        input:focus { outline: none; border-color: #2563eb; background: #fff; }
+
+        .hint { font-size: 0.8rem; color: #64748b; margin-bottom: 15px; line-height: 1.4; }
+
+        /* The "Card" for each day */
+        .day-row { 
+            background: #f1f5f9; padding: 12px; border-radius: 12px; margin-bottom: 12px;
+            display: flex; flex-direction: column; gap: 10px; 
+        }
+        .day-label { font-weight: 700; color: #334155; font-size: 1rem; }
+        .input-group { display: flex; gap: 10px; }
+        .input-group div { flex: 1; }
+        .input-group label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+
+        button { 
+            width: 100%; padding: 16px; margin-top: 10px; background: #2563eb; color: white; 
+            border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:active { transform: scale(0.98); background: #1d4ed8; }
+
+        @media (min-width: 480px) {
+            .day-row { flex-direction: row; align-items: center; padding: 10px 15px; }
+            .day-label { width: 110px; margin-bottom: 0; }
+            .input-group { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Weekly Schedule</h2>
+    
+    <div class="header-inputs">
+        <div>
+            <label for="title">Event Title</label>
+            <input type="text" id="title" value="Work Shift" placeholder="e.g. Work">
+        </div>
+        <div>
+            <label for="start-date">Week Starting (Sunday)</label>
+            <input type="date" id="start-date">
+        </div>
+    </div>
+
+    <p class="hint">Enter military time (e.g., <b>0800</b> and <b>1630</b>). Skip days by leaving them blank.</p>
+    
+    <div id="week-inputs"></div>
+
+    <button onclick="generateWeeklyICS()">Download .ics File</button>
+</div>
+
+<script>
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const grid = document.getElementById('week-inputs');
+
+    // Initialize the UI rows
+    days.forEach((day, index) => {
+        grid.innerHTML += `
+            <div class="day-row">
+                <div class="day-label">${day}</div>
+                <div class="input-group">
+                    <div>
+                        <label>Start</label>
+                        <input type="text" class="start-t" placeholder="0900" 
+                               inputmode="numeric" pattern="[0-9]*" maxlength="4">
+                    </div>
+                    <div>
+                        <label>End</label>
+                        <input type="text" class="end-t" placeholder="1700" 
+                               inputmode="numeric" pattern="[0-9]*" maxlength="4">
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    function generateWeeklyICS() {
+        const title = document.getElementById('title').value || "Event";
+        const startDateVal = document.getElementById('start-date').value;
+        
+        if (!startDateVal) {
+            alert("Please select the starting Monday.");
+            return;
+        }
+
+        const startInputs = document.querySelectorAll('.start-t');
+        const endInputs = document.querySelectorAll('.end-t');
+        let icsContent = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//WeeklyScheduler//EN"];
+
+        startInputs.forEach((input, i) => {
+            const startTime = input.value.trim();
+            const endTime = endInputs[i].value.trim();
+
+            if (startTime && endTime) {
+                // Adjust for date offset
+                const baseDate = new Date(startDateVal + "T00:00:00");
+                baseDate.setDate(baseDate.getDate() + i);
+                
+                const dateStr = baseDate.toISOString().split('T')[0].replace(/-/g, '');
+                // Pad start and end times to 4 digits (e.g., "800" becomes "0800")
+                const sPadded = startTime.padStart(4, '0');
+                const ePadded = endTime.padStart(4, '0');
+                
+                const startFormatted = `${dateStr}T${sPadded}00`;
+                const endFormatted = `${dateStr}T${ePadded}00`;
+
+                icsContent.push("BEGIN:VEVENT");
+                icsContent.push(`SUMMARY:${title}`);
+                icsContent.push(`DTSTART:${startFormatted}`);
+                icsContent.push(`DTEND:${endFormatted}`);
+                icsContent.push("END:VEVENT");
+            }
+        });
+
+        icsContent.push("END:VCALENDAR");
+
+        if (icsContent.length <= 4) {
+            alert("Please enter at least one shift.");
+            return;
+        }
+
+        const blob = new Blob([icsContent.join("\r\n")], { type: 'text/calendar' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Schedule_${startDateVal}.ics`;
+        link.click();
+    }
+</script>
+
+</body>
+</html>
